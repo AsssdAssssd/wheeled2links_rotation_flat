@@ -44,10 +44,11 @@ class Wl_Env:
         self.num_joints = env_cfg["num_joints"]
         self.num_hip_joints = env_cfg["num_hip_joints"]
         self.num_knee_joints = env_cfg["num_knee_joints"]
+        self.num_gimbal_joints = env_cfg["num_gimbal_joints"]
         self.num_wheels = env_cfg["num_wheels"]
         self.num_commands = command_cfg["num_commands"]
 
-        assert self.num_joints == self.num_hip_joints + self.num_knee_joints
+        assert self.num_joints == self.num_hip_joints + self.num_knee_joints+self.num_gimbal_joints
         assert self.num_actions == self.num_joints + self.num_wheels
 
         # 定义训练参数
@@ -108,8 +109,13 @@ class Wl_Env:
             gs.morphs.Plane(),
         )
         self.robot = self.scene.add_entity(
-            gs.morphs.URDF(
-                file="assets/wheel_leg_car_2links/wheel_leg_car_2links.urdf",
+            # gs.morphs.URDF(
+            #     file="assets/wheel_leg_car_2links/wheel_leg_car_2links.urdf",
+            #     pos=self.env_cfg["base_init_pos"],
+            #     quat=self.env_cfg["base_init_quat"],
+            # ),
+            gs.morphs.MJCF(
+                file="assets/wheel_leg_car_2links/wheel_leg_car_2link.xml",
                 pos=self.env_cfg["base_init_pos"],
                 quat=self.env_cfg["base_init_quat"],
             ),
@@ -119,7 +125,7 @@ class Wl_Env:
             self.imu = self.scene.add_sensor(
                 gs.sensors.IMU(
                     entity_idx=self.robot.idx,
-                    link_idx_local=self.robot.get_link(self.imu_cfg.get("link_name", "base_link")).idx_local,
+                    link_idx_local=self.robot.get_link(self.imu_cfg.get("link_name", "base")).idx_local,
                     pos_offset=tuple(self.imu_cfg.get("pos_offset", (0.0, 0.0, 0.0))),
                     acc_noise=self.imu_cfg.get("acc_noise", 0.0),
                     acc_bias=self.imu_cfg.get("acc_bias", 0.0),
@@ -138,6 +144,11 @@ class Wl_Env:
         ########### 创建索引 ###########
         self.joints_dof_idx = torch.tensor(
             [self.robot.get_joint(name).dof_start for name in self.env_cfg["joint_names"]],
+            dtype=gs.tc_int,
+            device=gs.device,
+        )
+        self.gimbal_joints_dof_idx = torch.tensor(
+            [self.robot.get_joint(name).dof_start for name in self.env_cfg["gimbal_names"]],
             dtype=gs.tc_int,
             device=gs.device,
         )
@@ -221,6 +232,9 @@ class Wl_Env:
         self.wheel_vel = torch.empty((self.num_envs, self.num_wheels), dtype=gs.tc_float, device=gs.device)
         self.leg_length = torch.empty((self.num_envs, 2), dtype=gs.tc_float, device=gs.device)
         self.leg_angle = torch.empty((self.num_envs, 2), dtype=gs.tc_float, device=gs.device)
+        self.gimbal_ang = torch.empty((self.num_envs, self.num_gimbal_joints), dtype=gs.tc_float, device=gs.device)
+        self.gimbal_abs_ang_rad = torch.empty((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
+        self.gimbal_yaw_abs_ref = torch.empty((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
         self.base_pos = torch.empty((self.num_envs, 3), dtype=gs.tc_float, device=gs.device)
         self.base_quat = torch.empty((self.num_envs, 4), dtype=gs.tc_float, device=gs.device)
         self.base_euler = torch.empty((self.num_envs, 3), dtype=gs.tc_float, device=gs.device)
@@ -245,7 +259,7 @@ class Wl_Env:
         self.raw_reward_scales: dict[str, float] = dict(reward_cfg["reward_scales"])
         self.reward_scales: dict[str, float] = {}
         self.commands_scale = torch.tensor(
-            [self.obs_scales["lin_vel"], self.obs_scales["ang_vel"], self.obs_scales["leg_length"]],
+            [self.obs_scales["lin_vel"], self.obs_scales["ang_vel"], self.obs_scales["leg_length"],self.obs_scales["gimbal_yaw_vel"],],
             dtype=gs.tc_float,
             device=gs.device,
         )
@@ -256,6 +270,7 @@ class Wl_Env:
                 self.command_cfg["lin_vel_range"],
                 self.command_cfg["ang_vel_range"],
                 self.command_cfg["min_leg_length_range"],
+                self.command_cfg["gimbal_yaw_vel_range"],
             )
         )
 
@@ -298,7 +313,10 @@ class Wl_Env:
         self.global_step += 1
         if self.curriculum.update(self.global_step):
             print(f"[curriculum] stage={self.curriculum.current_stage_name} step={self.global_step}")
-
+        
+        ########### 更新云台参考角度(积累放这里ok吧，，，) ###########
+        nxt= self.gimbal_yaw_abs_ref + self.commands[:, 3:4] * self.dt  # 假设command的第3个维度是云台yaw速度
+        self.gimbal_yaw_abs_ref=torch.atan2(torch.sin(nxt),torch.cos(nxt))
         ########### 执行动作 ###########
         hip_joint_actions = torch.clip(
             actions[:, : self.num_hip_joints],
@@ -310,12 +328,15 @@ class Wl_Env:
             -self.env_cfg["clip_knee_joint_action"],
             self.env_cfg["clip_knee_joint_action"],
         )
+        gimbal_actions = actions[:, self.num_hip_joints + self.num_knee_joints: self.num_joints ]#由于是世界方向，我觉得不用clip
+
         wheel_actions = torch.clip(
             actions[:, self.num_joints : self.num_joints + self.num_wheels],
             -self.env_cfg["clip_wheel_action"],
             self.env_cfg["clip_wheel_action"],
         )
-        self.actions = torch.concatenate((hip_joint_actions, knee_joint_actions, wheel_actions), dim=-1)
+        
+        self.actions = torch.concatenate((hip_joint_actions, knee_joint_actions,gimbal_actions, wheel_actions), dim=-1)
         exec_actions = self.last_actions if self.simulate_action_latency else self.actions
 
         target_hip_pos = exec_actions[:, : self.num_hip_joints] * self.env_cfg["hip_joint_pos_scale"]
@@ -323,11 +344,14 @@ class Wl_Env:
             exec_actions[:, self.num_hip_joints : self.num_hip_joints + self.num_knee_joints]
             * self.env_cfg["knee_joint_pos_scale"]
         )
+        targer_gimbal_pos = (
+            exec_actions[:, self.num_hip_joints + self.num_knee_joints: self.num_joints]*self.env_cfg["gimbal_joint_ang_scale"]
+        )
         target_wheel_vel = (
             exec_actions[:, self.num_joints : self.num_joints + self.num_wheels] * self.env_cfg["wheel_vel_scale"]
         )
-
-        target_joint_pos = torch.concatenate((target_hip_pos, target_knee_pos), dim=-1) + self.default_joint_pos
+        #这里的target是相当于base系下的平衡点说的，只能说在defaultpos等于0的时候成立了 TODO
+        target_joint_pos = torch.concatenate((target_hip_pos, target_knee_pos,self._conver_gimbal_world_yaw_angel_to_base(targer_gimbal_pos)), dim=-1) + self.default_joint_pos
         self.target_joint_pos.copy_(target_joint_pos)
         self.target_wheel_vel.copy_(target_wheel_vel)
 
@@ -341,7 +365,7 @@ class Wl_Env:
         ########### 更新buffer ###########
         self.episode_length_buf += 1
         self.base_pos = self.robot.get_pos()
-        self.base_quat = self.base_quat = self.robot.get_quat()
+        self.base_quat = self.robot.get_quat()
         self.base_euler = quat_to_xyz(
             transform_quat_by_quat(self.init_base_quat, self.base_quat),
             rpy=True,
@@ -356,11 +380,13 @@ class Wl_Env:
         self.joint_pos = self.robot.get_dofs_position(self.joints_dof_idx)
         self.joint_vel = self.robot.get_dofs_velocity(self.joints_dof_idx)
         self.wheel_vel = self.robot.get_dofs_velocity(self.wheels_dof_idx)
+        self.gimbal_ang = self.robot.get_dofs_position(self.gimbal_joints_dof_idx)
         self._update_velocity_estimator()
 
         knee_pos = self.robot.get_dofs_position(self.knees_dof_idx)
         self.leg_length = self._compute_leg_length(knee_pos)
         self.leg_angle = self._compute_leg_angle(self.joint_pos)
+        self.gimbal_abs_ang_rad = self._compute_gimbal_world_yaw_angel(self.gimbal_ang)
         self._update_tracking_gate()
 
         ########### 判断终止 ###########
@@ -427,6 +453,11 @@ class Wl_Env:
             # 状态相关
             self.base_pos.copy_(self.init_base_pos)
             self.base_quat.copy_(self.init_base_quat)
+            self.base_euler = quat_to_xyz(
+                        transform_quat_by_quat(self.init_base_quat, self.base_quat),
+                        rpy=True,
+                        degrees=True,
+                    )
             self.base_lin_vel.zero_()
             self.base_ang_vel.zero_()
             self.projected_gravity.copy_(self.init_projected_gravity_dir)
@@ -444,6 +475,10 @@ class Wl_Env:
             self.wheel_vel.zero_()
             self.leg_length.copy_(self.init_leg_length)
             self.leg_angle.copy_(self.init_leg_angle)
+            self.gimbal_ang.zero_()
+            self.gimbal_abs_ang_rad.zero_()
+            self.gimbal_yaw_abs_ref.copy_(torch.deg2rad(self.base_euler[:,2:3]) + self.default_joint_pos[-1])
+
             # 其他
             self.reset_buf.fill_(True)
             self.actions.zero_()
@@ -454,9 +489,11 @@ class Wl_Env:
         else:
             torch.where(env_idx[:, None], self.init_base_pos, self.base_pos, out=self.base_pos)
             torch.where(env_idx[:, None], self.init_base_quat, self.base_quat, out=self.base_quat)
+            torch.where(env_idx[:, None], quat_to_xyz(transform_quat_by_quat(self.init_base_quat, self.base_quat),rpy=True,degrees=True,), self.base_euler, out=self.base_euler )
             torch.where(
                 env_idx[:, None], self.init_projected_gravity_dir, self.projected_gravity, out=self.projected_gravity
             )
+            torch.where(env_idx[:, None], torch.deg2rad(self.base_euler[:,2:3]) + self.default_joint_pos[-1], self.gimbal_yaw_abs_ref, out=self.gimbal_yaw_abs_ref)
             self.height_gate.masked_fill_(env_idx, 1.0)
             self.attitude_gate.masked_fill_(env_idx, 1.0)
             self.tracking_gate_raw.masked_fill_(env_idx, 1.0)
@@ -471,6 +508,8 @@ class Wl_Env:
             self.estimated_base_lin_vel.masked_fill_(env_idx, 0.0)
             self.joint_vel.masked_fill_(env_idx[:, None], 0.0)
             self.wheel_vel.masked_fill_(env_idx[:, None], 0.0)
+            self.gimbal_ang.masked_fill_(env_idx[:, None], 0.0)
+            self.gimbal_abs_ang_rad.masked_fill_(env_idx[:, None], 0.0)
             torch.where(env_idx[:, None], self.init_leg_length, self.leg_length, out=self.leg_length)
             torch.where(env_idx[:, None], self.init_leg_angle, self.leg_angle, out=self.leg_angle)
             self.reset_buf.masked_fill_(env_idx, True)
@@ -565,12 +604,15 @@ class Wl_Env:
         self.obs_components = {
             **velocity_components,
             "projected_gravity": self.projected_gravity,  # 3
-            "commands": self.commands * self.commands_scale,  # 3
-            "joint_pos_offset": (self.joint_pos - self.default_joint_pos) * self.obs_scales["joint_pos"],
+            "commands": self.commands * self.commands_scale,  # 4
+            "joint_pos_offset": (self.joint_pos[:,:-self.num_gimbal_joints] - self.default_joint_pos[:-self.num_gimbal_joints]) * self.obs_scales["joint_pos"],#排除base角度的gimbal
             "joint_vel": self.joint_vel * self.obs_scales["joint_vel"],
             "wheel_vel": self.wheel_vel * self.obs_scales["wheel_vel"],
             "leg_length": self.leg_length * self.obs_scales["leg_length"],  # 2
             "leg_angle": self.leg_angle * self.obs_scales["leg_angle"],  # 2
+
+            "gimbal_yaw_joint": self.gimbal_abs_ang_rad * self.obs_scales["gimbal_yaw_angle"],  # 1
+            # "gimbal_yaw_vel":tmp，等会再补,
             "actions": self.actions,
         }
         self.obs_buf = torch.concatenate(tuple(self.obs_components.values()), dim=-1)
@@ -619,7 +661,7 @@ class Wl_Env:
 
     def _apply_command_ranges(self, values):
         """应用课程指令范围，并重建采样使用的上下限 Tensor。"""
-        allowed = {"lin_vel_range", "ang_vel_range", "min_leg_length_range"}
+        allowed = {"lin_vel_range", "ang_vel_range", "min_leg_length_range","gimbal_yaw_vel_range"}
         unknown = set(values).difference(allowed)
         if unknown:
             raise KeyError(f"Unsupported command range curriculum keys: {sorted(unknown)}")
@@ -633,6 +675,8 @@ class Wl_Env:
                 self.command_cfg["lin_vel_range"],
                 self.command_cfg["ang_vel_range"],
                 self.command_cfg["min_leg_length_range"],
+                self.command_cfg["gimbal_yaw_vel_range"]
+
             )
         )
 
@@ -726,13 +770,30 @@ class Wl_Env:
         leg_angle = torch.atan2(leg_x, leg_down)
         return leg_angle
 
+    def _compute_gimbal_world_yaw_angel(self,gimbal_joints_ang_base):
+        world_gimbal_yaw_rad=torch.deg2rad(self.base_euler[:, 2:3] )+ gimbal_joints_ang_base[:,0:1]#默认第一个yaw,base是度
+        return torch.atan2(torch.sin(world_gimbal_yaw_rad),torch.cos(world_gimbal_yaw_rad))#返回弧度
+    
+    def _conver_gimbal_world_yaw_angel_to_base(self,target_yaw):
+    #注意这里是更新前的，，，emm不过好像直接获取也是上一轮的哦，，，
+        target_gimbal_yaw_rad_base=target_yaw - torch.deg2rad(self.base_euler[:, 2] ).unsqueeze(-1)#默认第一个yaw,base是度
+        return torch.atan2(torch.sin(target_gimbal_yaw_rad_base),torch.cos(target_gimbal_yaw_rad_base))#返回弧度
     # ----------奖励函数------------
     # 这里的奖励只计算相对大小，缩放和正负由reward_scales决定
 
     def _reward_tracking_lin_vel(self):
         # 弱的无门控误差惩罚，确保门控未打开时仍有速度学习信号。
-        lin_vel_error = torch.square(self.base_lin_vel[:, 0] - self.commands[:, 0])
+        base_lin_vel_world = self.robot.get_vel()#获得绝对世界坐标系
+        psi=self.gimbal_abs_ang_rad.squeeze(-1)
+        fwd = torch.stack([torch.cos(psi),torch.sin(psi),torch.zeros_like(psi)],dim=-1)
+        gimbal_forward=(base_lin_vel_world * fwd).sum(-1)
+        lin_vel_error = torch.square(gimbal_forward-self.commands[:,0])
         return lin_vel_error
+
+    def _reward_gimbal_yaw_ang(self):
+        gimbal_yaw_error = (self.gimbal_abs_ang_rad - self.gimbal_yaw_abs_ref).squeeze(-1)
+        err= torch.atan2(torch.sin(gimbal_yaw_error),torch.cos(gimbal_yaw_error))
+        return torch.square(err)
 
     def _reward_tracking_ang_vel(self):
         # 弱的无门控误差惩罚，确保门控未打开时仍有角速度学习信号。

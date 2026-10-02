@@ -67,10 +67,11 @@ def get_train_cfg(exp_name):
 
 def get_cfgs():
     env_cfg = {
-        "num_actions": 6,
-        "num_joints": 4,
+        "num_actions": 7, # 加上控制yaw
+        "num_joints": 5,
         "num_hip_joints": 2,
         "num_knee_joints": 2,
+        "num_gimbal_joints" :1,
         "num_wheels": 2,
         # joint/link names
         "default_joint_pos": {  # [rad]
@@ -78,13 +79,17 @@ def get_cfgs():
             "right_hip": np.pi / 4,
             "left_knee": -np.pi / 2,
             "right_knee": -np.pi / 2,
+            "gimbal_yaw_joint": 0.0,#相对于base的，rad
         },
         "joint_names": [
             "left_hip",
             "right_hip",
             "left_knee",
             "right_knee",
+            "gimbal_yaw_joint",
         ],
+        "gimbal_names":[
+        "gimbal_yaw_joint"],
         "wheel_names": [
             "left_wheel_joint",
             "right_wheel_joint",
@@ -104,10 +109,14 @@ def get_cfgs():
         "hip_joint_pos_scale": np.pi / 4,
         "knee_joint_pos_scale": np.pi / 3,
         "wheel_vel_scale": 20.0,
+
+        "gimbal_joint_ang_scale": np.pi,
+
         "simulate_action_latency": True,
         "clip_hip_joint_action": 1.0,
         "clip_knee_joint_action": 1.0,
         "clip_wheel_action": 1.0,
+        "clip_gimbal_joint_action": 1.0,
     }
     obs_cfg = {
         # 新训练使用真机可复现的速度接口。历史 cfg 没有该字段时，环境会退回原来的
@@ -145,6 +154,7 @@ def get_cfgs():
             "wheel_vel": 1.0 / 20.0,
             "leg_length": 1.0 / 0.34,
             "leg_angle": 1.0,
+            "gimbal_yaw_angle": 1.0/np.pi,
         },
     }
     reward_cfg = {
@@ -169,14 +179,17 @@ def get_cfgs():
             "leg_length": -20.0,
             "joint_vel": -1.0,
             "joint_pos": 0,
+            "gimbal_yaw_ang":-10,
+
             "alive": 5.0,
             "death": -100.0,
         },
     }
     command_cfg = {
-        "num_commands": 3,
-        "lin_vel_range": [-1.0, 1.0],
-        "ang_vel_range": [-0.8, 0.8],
+        "num_commands": 4,
+        "gimbal_yaw_vel_range": [-1.0,1.0], #这个云台的 
+        "lin_vel_range": [-0.0, 0.0],
+        "ang_vel_range": [-2.0, 2.0],#这个就是底盘的
         "min_leg_length_range": [0.15, 0.3],
     }
     curriculum_cfg = {
@@ -188,8 +201,9 @@ def get_cfgs():
                 "start_step": 0,
                 "targets": {
                     "command_ranges": {
-                        "lin_vel_range": [-0.10, 0.10],
-                        "ang_vel_range": [-0.2, 0.2],
+                        "gimbal_yaw_vel_range": [-0.0,0.0],
+                        "lin_vel_range": [-0.0, 0.0],
+                        "ang_vel_range": [-0.0, 0.0],
                         "min_leg_length_range": [0.24, 0.24],
                     },
                     "tracking_gate": {
@@ -213,6 +227,7 @@ def get_cfgs():
                         "leg_length": -30.0,
                         "joint_vel": -1.0,
                         "joint_pos": 0,
+                        "gimbal_yaw_ang":-10,
                         "alive": 20.0,
                         "death": -100.0,
                     },
@@ -223,8 +238,9 @@ def get_cfgs():
                 "start_step": 9600,
                 "targets": {
                     "command_ranges": {
-                        "lin_vel_range": [-0.5, 0.5],
-                        "ang_vel_range": [-0.4, 0.4],
+                        "gimbal_yaw_vel_range": [-0.0,0.0],
+                        "lin_vel_range": [-0.0, 0.0],
+                        "ang_vel_range": [-0.5, 0.5],
                         "min_leg_length_range": [0.22, 0.26],
                     },
                     "tracking_gate": {
@@ -248,6 +264,7 @@ def get_cfgs():
                         "leg_length": -40.0,
                         "joint_vel": -1.0,
                         "joint_pos": 0,
+                        "gimbal_yaw_ang":-10,
                         "alive": 15.0,
                         "death": -100.0,
                     },
@@ -258,8 +275,9 @@ def get_cfgs():
                 "start_step": 16800,
                 "targets": {
                     "command_ranges": {
-                        "lin_vel_range": [-0.75, 0.75],
-                        "ang_vel_range": [-0.6, 0.6],
+                        "gimbal_yaw_vel_range": [-0.0,0.0],
+                        "lin_vel_range": [-0.0, 0.0],
+                        "ang_vel_range": [-1.4, 1.4],
                         "min_leg_length_range": [0.18, 0.28],
                     },
                     "tracking_gate": {
@@ -279,6 +297,7 @@ def get_cfgs():
                         "leg_length": -50.0,
                         "joint_vel": -1.0,
                         "joint_pos": 0,
+                        "gimbal_yaw_ang":-10,
                         "alive": 10.0,
                         "death": -100.0,
                     },
@@ -289,8 +308,9 @@ def get_cfgs():
                 "start_step": 28800,
                 "targets": {
                     "command_ranges": {
-                        "lin_vel_range": [-1.0, 1.0],
-                        "ang_vel_range": [-0.8, 0.8],
+                        "gimbal_yaw_vel_range": [-0.0,0.0],
+                        "lin_vel_range": [-0.0, 0.0],
+                        "ang_vel_range": [-2.0, 2.0],
                         "min_leg_length_range": [0.16, 0.28],
                     },
                     "tracking_gate": {
@@ -310,6 +330,7 @@ def get_cfgs():
                         "leg_length": -50.0,
                         "joint_vel": -1.0,
                         "joint_pos": 0,
+                        "gimbal_yaw_ang":-10,
                         "alive": 5.0,
                         "death": -100.0,
                     },

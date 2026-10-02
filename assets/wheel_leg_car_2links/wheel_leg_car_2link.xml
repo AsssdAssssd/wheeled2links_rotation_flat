@@ -37,7 +37,7 @@
         </default>
     
         <default class="gimbal">
-            <joint type="hinge" limited="true" damping="0.5" armature="0.005"/>
+            <joint type="hinge" limited="false" damping="0.5" armature="0.005"/>
         </default>
     </default>
 
@@ -74,7 +74,7 @@
 
             <!--云台：一个yaw轴一个pitch轴    -->
             <body name="gimbal_yaw" pos="0 0 0.06">
-                <joint name ="gimbal_yaw_joint" class="gimbal" axis="0 0 1" range="-180 180"/>
+                <joint name ="gimbal_yaw_joint" class="gimbal" axis="0 0 1" />
                 <geom name="gimbal_yaw_arm" class="gimbal" type="box" 
                 size="0.018 0.018 0.09" pos="-0.045 0 0.078" euler="0 -30 0"
                 rgba="0.35 0.35 0.40 1"  mass="0.2775" />
