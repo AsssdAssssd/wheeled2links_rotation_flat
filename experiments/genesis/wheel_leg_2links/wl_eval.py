@@ -80,8 +80,8 @@ class KeyboardCommand:
             self._keybind("command_turn_right", Key.RIGHT, self._change_ang, -self.ang_step),
             self._keybind("command_raise_body", Key.PAGEUP, self._change_height, self.height_step),
             self._keybind("command_lower_body", Key.PAGEDOWN, self._change_height, -self.height_step),
-            self._keybind("command_gimbal_turn_left",Key.A,self._change_gimbal,self.gimal_step),
-            self._keybind("command_gimbal_turn_right",Key.D,self._change_gimbal,-self.gimal_step),
+            self._keybind("command_gimbal_turn_left",Key.Z,self._change_gimbal,self.gimbal_step),
+            self._keybind("command_gimbal_turn_right",Key.X,self._change_gimbal,-self.gimbal_step),
 
             Keybind(
                 "command_stop",
@@ -115,7 +115,7 @@ class KeyboardCommand:
 
     def _change_gimbal(self,amount):
         lower,upper=self.env.command_cfg["gimbal_yaw_vel_range"]
-        self.gimbal_yaw = min(max(self.gimbal_yaw_vel+amount,lower),upper)
+        self.gimbal_yaw_vel = min(max(self.gimbal_yaw_vel+amount,lower),upper)
 
     def stop(self):
         self.lin_vel = 0.0

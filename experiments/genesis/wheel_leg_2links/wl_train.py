@@ -189,7 +189,7 @@ def get_cfgs():
     command_cfg = {
         "num_commands": 4,
         "gimbal_yaw_vel_range": [-1.0,1.0], #这个云台的 
-        "lin_vel_range": [-0.0, 0.0],
+        "lin_vel_range": [-1.0, 1.0],
         "ang_vel_range": [-2.0, 2.0],#这个就是底盘的
         "min_leg_length_range": [0.15, 0.3],
     }
@@ -240,7 +240,7 @@ def get_cfgs():
                 "targets": {
                     "command_ranges": {
                         "gimbal_yaw_vel_range": [-0.3,0.3],
-                        "lin_vel_range": [-0.0, 0.0],
+                        "lin_vel_range": [-0.25, 0.25],
                         "ang_vel_range": [-0.5, 0.5],
                         "min_leg_length_range": [0.22, 0.26],
                     },
@@ -277,7 +277,7 @@ def get_cfgs():
                 "targets": {
                     "command_ranges": {
                         "gimbal_yaw_vel_range": [-0.75,0.75],
-                        "lin_vel_range": [-0.0, 0.0],
+                        "lin_vel_range": [-0.5, 0.5],
                         "ang_vel_range": [-1.4, 1.4],
                         "min_leg_length_range": [0.18, 0.28],
                     },
@@ -310,7 +310,7 @@ def get_cfgs():
                 "targets": {
                     "command_ranges": {
                         "gimbal_yaw_vel_range": [-1.0,1.0],
-                        "lin_vel_range": [-0.0, 0.0],
+                        "lin_vel_range": [-1.0, 1.0],
                         "ang_vel_range": [-2.0, 2.0],
                         "min_leg_length_range": [0.16, 0.28],
                     },
