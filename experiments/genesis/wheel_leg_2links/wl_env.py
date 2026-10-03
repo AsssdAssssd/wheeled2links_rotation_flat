@@ -799,7 +799,11 @@ class Wl_Env:
         return ang_vel_error
 
     def _reward_gated_tracking_lin_vel(self):
-        lin_vel_error = torch.square(self.base_lin_vel[:, 0] - self.commands[:, 0])
+        base_lin_vel_world = self.robot.get_vel()#获得绝对世界坐标系
+        psi=self.gimbal_abs_ang_rad.squeeze(-1)
+        fwd = torch.stack([torch.cos(psi),torch.sin(psi),torch.zeros_like(psi)],dim=-1)
+        gimbal_forward=(base_lin_vel_world * fwd).sum(-1)
+        lin_vel_error = torch.square(gimbal_forward-self.commands[:,0])
         tracking_bonus = torch.exp(-lin_vel_error / self.reward_cfg["tracking_sigma"])
         return self.tracking_gate * tracking_bonus
 

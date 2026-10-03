@@ -239,7 +239,7 @@ def get_cfgs():
                 "start_step": 9600,
                 "targets": {
                     "command_ranges": {
-                        "gimbal_yaw_vel_range": [-0.0,0.0],
+                        "gimbal_yaw_vel_range": [-0.3,0.3],
                         "lin_vel_range": [-0.0, 0.0],
                         "ang_vel_range": [-0.5, 0.5],
                         "min_leg_length_range": [0.22, 0.26],
@@ -276,7 +276,7 @@ def get_cfgs():
                 "start_step": 16800,
                 "targets": {
                     "command_ranges": {
-                        "gimbal_yaw_vel_range": [-0.0,0.0],
+                        "gimbal_yaw_vel_range": [-0.75,0.75],
                         "lin_vel_range": [-0.0, 0.0],
                         "ang_vel_range": [-1.4, 1.4],
                         "min_leg_length_range": [0.18, 0.28],
@@ -309,7 +309,7 @@ def get_cfgs():
                 "start_step": 28800,
                 "targets": {
                     "command_ranges": {
-                        "gimbal_yaw_vel_range": [-0.0,0.0],
+                        "gimbal_yaw_vel_range": [-1.0,1.0],
                         "lin_vel_range": [-0.0, 0.0],
                         "ang_vel_range": [-2.0, 2.0],
                         "min_leg_length_range": [0.16, 0.28],
@@ -346,7 +346,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("-e", "--exp_name", type=str, default="flat_and_rotation")
-    parser.add_argument("-B", "--num_envs", type=int, default=2048)
+    parser.add_argument("-B", "--num_envs", type=int, default=1024)
     parser.add_argument("--max_iterations", type=int, default=2001)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--log-root", type=str, default="logs")
