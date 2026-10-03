@@ -57,8 +57,8 @@
         <geom name="ground" type="plane" size="5 5 0.1"
               material="ground_mat" friction="1.2 0.01 0.001" />
 
-        <body name="base" pos="0 0 0.42">
-            <freejoint name="base_free" />
+        <body name="base_link" pos="0 0 0.42">
+            <freejoint name="base_link" />
 
             <geom name="base_geom" type="box" size="0.22 0.16 0.06"
                   mass="4.0" rgba="0.85 0.25 0.18 1" />
@@ -194,7 +194,7 @@
         <!-- <jointvel name="gimbal_pitch_vel" joint="gimbal_pitch_joint" /> -->
 
         <!-- 车身姿态与 IMU -->
-        <framequat name="base_quat" objtype="body" objname="base" />
+        <framequat name="base_quat" objtype="body" objname="base_link" />
         <gyro name="base_gyro" site="imu" />
         <accelerometer name="base_acc" site="imu" />
     </sensor>

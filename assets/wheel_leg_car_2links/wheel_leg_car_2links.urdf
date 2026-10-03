@@ -60,6 +60,68 @@
         <origin xyz="0 0 0" rpy="0 0 0" />
     </joint>
 
+    <!-- ==================== 云台 ==================== -->
+    <link name="gimbal_yaw_link">
+        <inertial>
+            <origin xyz="-0.045 0 0.078" rpy="0 0 0" />
+            <mass value="0.2775" />
+            <inertia ixx="0.000779" ixy="0" ixz="0"
+                     iyy="0.000779" iyz="0"
+                     izz="0.000060" />
+        </inertial>
+        <visual>
+            <origin xyz="-0.045 0 0.078" rpy="0 -0.5235987756 0" />
+            <geometry>
+                <box size="0.036 0.036 0.18" />
+            </geometry>
+            <material name="lower_green" />
+        </visual>
+        <collision>
+            <origin xyz="-0.045 0 0.078" rpy="0 -0.5235987756 0" />
+            <geometry>
+                <box size="0.036 0.036 0.18" />
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="gimbal_yaw_joint" type="continuous">
+        <parent link="base_link" />
+        <child link="gimbal_yaw_link" />
+        <origin xyz="0 0 0.06" rpy="0 0 0" />
+        <axis xyz="0 0 1" />
+        <limit effort="5" velocity="30" />
+        <dynamics damping="0.5" friction="0" />
+    </joint>
+
+    <link name="gimbal_pitch_link">
+        <inertial>
+            <origin xyz="0.14 0 0" rpy="0 0 0" />
+            <mass value="0.25" />
+            <inertia ixx="0.000067" ixy="0" ixz="0"
+                     iyy="0.001667" iyz="0"
+                     izz="0.001667" />
+        </inertial>
+        <visual>
+            <origin xyz="0.14 0 0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.28 0.04 0.04" />
+            </geometry>
+            <material name="wheel_black" />
+        </visual>
+        <collision>
+            <origin xyz="0.14 0 0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.28 0.04 0.04" />
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="gimbal_pitch_joint" type="fixed">
+        <parent link="gimbal_yaw_link" />
+        <child link="gimbal_pitch_link" />
+        <origin xyz="-0.09 0 0.156" rpy="0 0 0" />
+    </joint>
+
     <!-- ==================== 左腿 ==================== -->
     <link name="left_upper_leg_link">
         <inertial>

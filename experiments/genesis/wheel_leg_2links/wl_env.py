@@ -109,13 +109,8 @@ class Wl_Env:
             gs.morphs.Plane(),
         )
         self.robot = self.scene.add_entity(
-            # gs.morphs.URDF(
-            #     file="assets/wheel_leg_car_2links/wheel_leg_car_2links.urdf",
-            #     pos=self.env_cfg["base_init_pos"],
-            #     quat=self.env_cfg["base_init_quat"],
-            # ),
-            gs.morphs.MJCF(
-                file="assets/wheel_leg_car_2links/wheel_leg_car_2link.xml",
+            gs.morphs.URDF(
+                file="assets/wheel_leg_car_2links/wheel_leg_car_2links.urdf",
                 pos=self.env_cfg["base_init_pos"],
                 quat=self.env_cfg["base_init_quat"],
             ),
@@ -125,7 +120,7 @@ class Wl_Env:
             self.imu = self.scene.add_sensor(
                 gs.sensors.IMU(
                     entity_idx=self.robot.idx,
-                    link_idx_local=self.robot.get_link(self.imu_cfg.get("link_name", "base")).idx_local,
+                    link_idx_local=self.robot.get_link(self.imu_cfg.get("link_name", "base_link")).idx_local,
                     pos_offset=tuple(self.imu_cfg.get("pos_offset", (0.0, 0.0, 0.0))),
                     acc_noise=self.imu_cfg.get("acc_noise", 0.0),
                     acc_bias=self.imu_cfg.get("acc_bias", 0.0),
@@ -259,7 +254,7 @@ class Wl_Env:
         self.raw_reward_scales: dict[str, float] = dict(reward_cfg["reward_scales"])
         self.reward_scales: dict[str, float] = {}
         self.commands_scale = torch.tensor(
-            [self.obs_scales["lin_vel"], self.obs_scales["ang_vel"], self.obs_scales["leg_length"],self.obs_scales["gimbal_yaw_vel"],],
+            [self.obs_scales["lin_vel"], self.obs_scales["ang_vel"], self.obs_scales["leg_length"],self.obs_scales["gimbal_yaw_angle"],],
             dtype=gs.tc_float,
             device=gs.device,
         )

@@ -110,7 +110,8 @@ def get_cfgs():
         "knee_joint_pos_scale": np.pi / 3,
         "wheel_vel_scale": 20.0,
 
-        "gimbal_joint_ang_scale": np.pi,
+        # "gimbal_joint_ang_scale": np.pi,
+        "gimbal_joint_ang_scale": 0.0,
 
         "simulate_action_latency": True,
         "clip_hip_joint_action": 1.0,
@@ -345,7 +346,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("-e", "--exp_name", type=str, default="flat_and_rotation")
-    parser.add_argument("-B", "--num_envs", type=int, default=4096)
+    parser.add_argument("-B", "--num_envs", type=int, default=2048)
     parser.add_argument("--max_iterations", type=int, default=2001)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--log-root", type=str, default="logs")

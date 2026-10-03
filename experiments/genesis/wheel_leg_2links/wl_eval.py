@@ -230,7 +230,7 @@ def verify_fixed_command(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--exp_name", type=str, default="wl_2link_1.4")
+    parser.add_argument("-e", "--exp_name", type=str, default="flat_and_rotation")
     parser.add_argument("--log-root", type=str, default="logs")
     parser.add_argument("--version", type=str, default=None, help="version_0003 or 3; default: latest valid run")
     parser.add_argument("--ckpt", type=int, default=None, help="checkpoint number; default: latest in selected run")
