@@ -595,7 +595,6 @@ class Wl_Env:
                 "base_lin_vel": self.base_lin_vel * self.obs_scales["lin_vel"],  # 3
                 "base_ang_vel": self.base_ang_vel * self.obs_scales["ang_vel"],  # 3
             }
-
         self.obs_components = {
             **velocity_components,
             "projected_gravity": self.projected_gravity,  # 3
@@ -607,7 +606,10 @@ class Wl_Env:
             "leg_angle": self.leg_angle * self.obs_scales["leg_angle"],  # 2
 
             "gimbal_yaw_joint": self.gimbal_abs_ang_rad * self.obs_scales["gimbal_yaw_angle"],  # 1
-            # "gimbal_yaw_vel":tmp，等会再补,
+            # "gimbal_yaw_vel":tmp，等会再补, TODO 必须补齐，要不然云台控制无法闭环，但是由于需要先实现直线走，先搁置
+
+            #“gimbal_base_cha”：车需要根据当前base和gimbal的角度来选择 “走路优先”/“旋转优先” TODO
+            "gimbal_yaw_2_base_angle": torch.stack([torch.sin(self.gimbal_ang[:,0]),torch.cos(self.gimbal_ang[:,0])],dim=-1),#单传warp会跳变，还是得隐射到连续上，单sin/cos可能辨别不了对称，所以就二维了
             "actions": self.actions,
         }
         self.obs_buf = torch.concatenate(tuple(self.obs_components.values()), dim=-1)
@@ -779,14 +781,12 @@ class Wl_Env:
     # ----------奖励函数------------
     # 这里的奖励只计算相对大小，缩放和正负由reward_scales决定
 
-    def _reward_tracking_lin_vel(self):
+    def _reward_tracking_lin_vel(self):#同时限制大小和方向
         # 弱的无门控误差惩罚，确保门控未打开时仍有速度学习信号。
-        base_lin_vel_world = self.robot.get_vel()#获得绝对世界坐标系
+        base_lin_vel_world = self.robot.get_vel()[:,:2]#N,2
         psi=self.gimbal_abs_ang_rad.squeeze(-1)
-        fwd = torch.stack([torch.cos(psi),torch.sin(psi),torch.zeros_like(psi)],dim=-1)
-        gimbal_forward=(base_lin_vel_world * fwd).sum(-1)
-        lin_vel_error = torch.square(gimbal_forward-self.commands[:,0])
-        return lin_vel_error
+        target=self.commands[:,0:1]*torch.stack([torch.cos(psi),torch.sin(psi)],dim=-1) #N,2
+        return torch.sum(torch.square(base_lin_vel_world-target),dim=-1)#(x-x)^2+(y-y)^2
 
     def _reward_gimbal_yaw_ang(self):
         gimbal_yaw_error = (self.gimbal_abs_ang_rad - self.gimbal_yaw_abs_ref).squeeze(-1)
@@ -799,12 +799,11 @@ class Wl_Env:
         return ang_vel_error
 
     def _reward_gated_tracking_lin_vel(self):
-        base_lin_vel_world = self.robot.get_vel()#获得绝对世界坐标系
+        base_lin_vel_world = self.robot.get_vel()[:,:2]#N,2
         psi=self.gimbal_abs_ang_rad.squeeze(-1)
-        fwd = torch.stack([torch.cos(psi),torch.sin(psi),torch.zeros_like(psi)],dim=-1)
-        gimbal_forward=(base_lin_vel_world * fwd).sum(-1)
-        lin_vel_error = torch.square(gimbal_forward-self.commands[:,0])
-        tracking_bonus = torch.exp(-lin_vel_error / self.reward_cfg["tracking_sigma"])
+        target=self.commands[:,0:1]*torch.stack([torch.cos(psi),torch.sin(psi)],dim=-1) #N,2
+        err=torch.sum(torch.square(base_lin_vel_world-target),dim=-1)#(x-x)^2+(y-y)^2
+        tracking_bonus = torch.exp(-err / self.reward_cfg["tracking_sigma"])
         return self.tracking_gate * tracking_bonus
 
     def _reward_gated_tracking_ang_vel(self):

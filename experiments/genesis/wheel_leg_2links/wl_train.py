@@ -156,6 +156,7 @@ def get_cfgs():
             "leg_length": 1.0 / 0.34,
             "leg_angle": 1.0,
             "gimbal_yaw_angle": 1.0/np.pi,
+            "gimbal_yaw_2_base_angle": 1.0/np.pi,
         },
     }
     reward_cfg = {
