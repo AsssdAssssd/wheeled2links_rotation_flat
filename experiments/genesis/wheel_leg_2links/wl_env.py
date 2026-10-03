@@ -375,7 +375,7 @@ class Wl_Env:
         self.joint_pos = self.robot.get_dofs_position(self.joints_dof_idx)
         self.joint_vel = self.robot.get_dofs_velocity(self.joints_dof_idx)
         self.wheel_vel = self.robot.get_dofs_velocity(self.wheels_dof_idx)
-        self.gimbal_ang = self.robot.get_dofs_position(self.gimbal_joints_dof_idx)
+        self.gimbal_ang = self.robot.get_dofs_position(self.gimbal_joints_dof_idx)#因为continue，所以这个会一直积累甚至到-100
         self._update_velocity_estimator()
 
         knee_pos = self.robot.get_dofs_position(self.knees_dof_idx)
@@ -771,8 +771,11 @@ class Wl_Env:
     
     def _conver_gimbal_world_yaw_angel_to_base(self,target_yaw):
     #注意这里是更新前的，，，emm不过好像直接获取也是上一轮的哦，，，
-        target_gimbal_yaw_rad_base=target_yaw - torch.deg2rad(self.base_euler[:, 2] ).unsqueeze(-1)#默认第一个yaw,base是度
-        return torch.atan2(torch.sin(target_gimbal_yaw_rad_base),torch.cos(target_gimbal_yaw_rad_base))#返回弧度
+        err=target_yaw - self.gimbal_abs_ang_rad#这里也默认了初始化的世界朝向和相对 朝向（内pos）都是0 TODO
+        err = torch.atan2(torch.sin(err),torch.cos(err))#返回弧度
+        return self.gimbal_ang+err
+    
+    
     # ----------奖励函数------------
     # 这里的奖励只计算相对大小，缩放和正负由reward_scales决定
 

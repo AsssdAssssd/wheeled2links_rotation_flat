@@ -110,8 +110,8 @@ def get_cfgs():
         "knee_joint_pos_scale": np.pi / 3,
         "wheel_vel_scale": 20.0,
 
-        # "gimbal_joint_ang_scale": np.pi,
-        "gimbal_joint_ang_scale": 0.0,
+        "gimbal_joint_ang_scale": np.pi,
+        # "gimbal_joint_ang_scale": 0.0,
 
         "simulate_action_latency": True,
         "clip_hip_joint_action": 1.0,
