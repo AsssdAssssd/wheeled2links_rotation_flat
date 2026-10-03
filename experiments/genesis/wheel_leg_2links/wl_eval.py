@@ -63,10 +63,12 @@ class KeyboardCommand:
         self.env = env
         self.lin_vel = 0.0
         self.ang_vel = 0.0
+        self.gimbal_yaw_vel = 0.0
         self.leg_length = float(env.init_leg_length.mean().item())
         self.lin_step = 0.1
         self.ang_step = 0.1
         self.height_step = 0.01
+        self.gimbal_step=0.1
 
         viewer = env.scene.viewer
         self.viewer = viewer
@@ -78,6 +80,9 @@ class KeyboardCommand:
             self._keybind("command_turn_right", Key.RIGHT, self._change_ang, -self.ang_step),
             self._keybind("command_raise_body", Key.PAGEUP, self._change_height, self.height_step),
             self._keybind("command_lower_body", Key.PAGEDOWN, self._change_height, -self.height_step),
+            self._keybind("command_gimbal_turn_left",Key.A,self._change_gimbal,self.gimal_step),
+            self._keybind("command_gimbal_turn_right",Key.D,self._change_gimbal,-self.gimal_step),
+
             Keybind(
                 "command_stop",
                 Key.SPACE,
@@ -108,14 +113,20 @@ class KeyboardCommand:
         lower, upper = self.env.command_cfg["min_leg_length_range"]
         self.leg_length = min(max(self.leg_length + amount, lower), upper)
 
+    def _change_gimbal(self,amount):
+        lower,upper=self.env.command_cfg["gimbal_yaw_vel_range"]
+        self.gimbal_yaw = min(max(self.gimbal_yaw_vel+amount,lower),upper)
+
     def stop(self):
         self.lin_vel = 0.0
         self.ang_vel = 0.0
+        self.gimbal_yaw_vel=0.0
 
     def write_to_env(self):
         self.env.commands[:, 0] = self.lin_vel
         self.env.commands[:, 1] = self.ang_vel
         self.env.commands[:, 2] = self.leg_length
+        self.env.commands[:, 3] = self.gimbal_yaw_vel
 
     def update_caption(self):
         env = self.env
@@ -123,7 +134,7 @@ class KeyboardCommand:
         pd = env.get_pd_diagnostics()
         velocity = env.get_velocity_estimator_diagnostics()
         text = (
-            f"command  vx={self.lin_vel:+.2f} m/s  wz={self.ang_vel:+.2f} rad/s  leg={self.leg_length:.3f} m",
+            f"command  vx={self.lin_vel:+.2f} m/s  wz={self.ang_vel:+.2f} rad/s  gimbal={self.gimbal_yaw_vel:+.2f} leg={self.leg_length:.3f} m",
             f"state    vx_true={env.base_lin_vel[0, 0].item():+.2f} m/s  "
             f"vx_est={velocity['estimated_forward_velocity'].item():+.2f} m/s  "
             f"wz={env.base_ang_vel[0, 2].item():+.2f} rad/s",
