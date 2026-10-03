@@ -156,6 +156,8 @@ def get_cfgs():
             "leg_length": 1.0 / 0.34,
             "leg_angle": 1.0,
             "gimbal_yaw_angle": 1.0/np.pi,
+            "gimbal_yaw_abs_vel": 1.0/np.pi,
+            "gimbal_yaw_error": 1.0/np.pi,
             "gimbal_yaw_2_base_angle": 1.0/np.pi,
         },
     }
@@ -191,7 +193,7 @@ def get_cfgs():
         "num_commands": 4,
         "gimbal_yaw_vel_range": [-1.0,1.0], #这个云台的 
         "lin_vel_range": [-1.0, 1.0],
-        "ang_vel_range": [-2.0, 2.0],#这个就是底盘的
+        "ang_vel_range": [0.0, 8.0],#这个就是底盘的
         "min_leg_length_range": [0.15, 0.3],
     }
     curriculum_cfg = {
@@ -205,7 +207,7 @@ def get_cfgs():
                     "command_ranges": {
                         "gimbal_yaw_vel_range": [-0.0,0.0],
                         "lin_vel_range": [-0.0, 0.0],
-                        "ang_vel_range": [-0.0, 0.0],
+                        "ang_vel_range": [0.0, 0.0],
                         "min_leg_length_range": [0.24, 0.24],
                     },
                     "tracking_gate": {
@@ -242,7 +244,7 @@ def get_cfgs():
                     "command_ranges": {
                         "gimbal_yaw_vel_range": [-0.3,0.3],
                         "lin_vel_range": [-0.25, 0.25],
-                        "ang_vel_range": [-0.5, 0.5],
+                        "ang_vel_range": [0.0, 2.0],
                         "min_leg_length_range": [0.22, 0.26],
                     },
                     "tracking_gate": {
@@ -279,7 +281,7 @@ def get_cfgs():
                     "command_ranges": {
                         "gimbal_yaw_vel_range": [-0.75,0.75],
                         "lin_vel_range": [-0.5, 0.5],
-                        "ang_vel_range": [-1.4, 1.4],
+                        "ang_vel_range": [2.0, 4.0],
                         "min_leg_length_range": [0.18, 0.28],
                     },
                     "tracking_gate": {
@@ -312,7 +314,7 @@ def get_cfgs():
                     "command_ranges": {
                         "gimbal_yaw_vel_range": [-1.0,1.0],
                         "lin_vel_range": [-1.0, 1.0],
-                        "ang_vel_range": [-2.0, 2.0],
+                        "ang_vel_range": [4.0, 8.0],
                         "min_leg_length_range": [0.16, 0.28],
                     },
                     "tracking_gate": {
@@ -347,7 +349,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("-e", "--exp_name", type=str, default="flat_and_rotation")
-    parser.add_argument("-B", "--num_envs", type=int, default=1024)
+    parser.add_argument("-B", "--num_envs", type=int, default=2048)
     parser.add_argument("--max_iterations", type=int, default=2001)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--log-root", type=str, default="logs")

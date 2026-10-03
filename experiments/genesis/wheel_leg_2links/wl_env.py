@@ -229,6 +229,7 @@ class Wl_Env:
         self.leg_angle = torch.empty((self.num_envs, 2), dtype=gs.tc_float, device=gs.device)
         self.gimbal_ang = torch.empty((self.num_envs, self.num_gimbal_joints), dtype=gs.tc_float, device=gs.device)
         self.gimbal_abs_ang_rad = torch.empty((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
+        self.gimbal_abs_ang_vel = torch.empty((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
         self.gimbal_yaw_abs_ref = torch.empty((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
         self.base_pos = torch.empty((self.num_envs, 3), dtype=gs.tc_float, device=gs.device)
         self.base_quat = torch.empty((self.num_envs, 4), dtype=gs.tc_float, device=gs.device)
@@ -382,6 +383,11 @@ class Wl_Env:
         self.leg_length = self._compute_leg_length(knee_pos)
         self.leg_angle = self._compute_leg_angle(self.joint_pos)
         self.gimbal_abs_ang_rad = self._compute_gimbal_world_yaw_angel(self.gimbal_ang)
+        # 云台绝对世界偏航角速度 = base 世界角速度 z 分量 + 云台关节相对角速度。
+        # 云台关节轴为 base 的 z 轴，机器人近直立时与世界 z 基本重合（倾角受限，误差可忽略）。
+        self.gimbal_abs_ang_vel = self.robot.get_ang()[:, 2:3] + self.robot.get_dofs_velocity(
+            self.gimbal_joints_dof_idx
+        )
         self._update_tracking_gate()
 
         ########### 判断终止 ###########
@@ -472,6 +478,7 @@ class Wl_Env:
             self.leg_angle.copy_(self.init_leg_angle)
             self.gimbal_ang.zero_()
             self.gimbal_abs_ang_rad.zero_()
+            self.gimbal_abs_ang_vel.zero_()
             self.gimbal_yaw_abs_ref.copy_(torch.deg2rad(self.base_euler[:,2:3]) + self.default_joint_pos[-1])
 
             # 其他
@@ -505,6 +512,7 @@ class Wl_Env:
             self.wheel_vel.masked_fill_(env_idx[:, None], 0.0)
             self.gimbal_ang.masked_fill_(env_idx[:, None], 0.0)
             self.gimbal_abs_ang_rad.masked_fill_(env_idx[:, None], 0.0)
+            self.gimbal_abs_ang_vel.masked_fill_(env_idx[:, None], 0.0)
             torch.where(env_idx[:, None], self.init_leg_length, self.leg_length, out=self.leg_length)
             torch.where(env_idx[:, None], self.init_leg_angle, self.leg_angle, out=self.leg_angle)
             self.reset_buf.masked_fill_(env_idx, True)
@@ -606,7 +614,12 @@ class Wl_Env:
             "leg_angle": self.leg_angle * self.obs_scales["leg_angle"],  # 2
 
             "gimbal_yaw_joint": self.gimbal_abs_ang_rad * self.obs_scales["gimbal_yaw_angle"],  # 1
-            # "gimbal_yaw_vel":tmp，等会再补, TODO 必须补齐，要不然云台控制无法闭环，但是由于需要先实现直线走，先搁置
+            "gimbal_yaw_abs_vel": self.gimbal_abs_ang_vel * self.obs_scales["gimbal_yaw_abs_vel"],  # 1 云台绝对世界偏航角速度，闭环反馈
+            # 跟踪误差（warp 到 [-pi,pi]）：奖励用的是绝对角 gimbal_yaw_abs_ref，不把这个误差给策略就等于盲控。
+            "gimbal_yaw_error": torch.atan2(
+                torch.sin(self.gimbal_yaw_abs_ref - self.gimbal_abs_ang_rad),
+                torch.cos(self.gimbal_yaw_abs_ref - self.gimbal_abs_ang_rad),
+            ) * self.obs_scales["gimbal_yaw_error"],  # 1
 
             #“gimbal_base_cha”：车需要根据当前base和gimbal的角度来选择 “走路优先”/“旋转优先” TODO
             "gimbal_yaw_2_base_angle": torch.stack([torch.sin(self.gimbal_ang[:,0]),torch.cos(self.gimbal_ang[:,0])],dim=-1),#单传warp会跳变，还是得隐射到连续上，单sin/cos可能辨别不了对称，所以就二维了
