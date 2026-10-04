@@ -232,6 +232,13 @@ class Wl_Env:
         self.gimbal_abs_ang_vel = torch.empty((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
         self.gimbal_yaw_abs_ref = torch.empty((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
         self.base_pos = torch.empty((self.num_envs, 3), dtype=gs.tc_float, device=gs.device)
+        # “正轨”：一个 episode 开始时锁定的世界系直线。vx 期望沿它平移。
+        # track_origin 是直线起点，track_yaw 是直线方向。track_cross/track_along 是
+        # 相对该直线的横向/纵向误差，可由车上的定位（点云匹配/里程计）算出来。
+        self.track_origin = torch.empty((self.num_envs, 2), dtype=gs.tc_float, device=gs.device)
+        self.track_yaw = torch.empty((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
+        self.track_cross = torch.empty((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
+        self.track_along = torch.empty((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
         self.base_quat = torch.empty((self.num_envs, 4), dtype=gs.tc_float, device=gs.device)
         self.base_euler = torch.empty((self.num_envs, 3), dtype=gs.tc_float, device=gs.device)
         self.base_lin_vel = torch.empty((self.num_envs, 3), dtype=gs.tc_float, device=gs.device)
@@ -373,6 +380,14 @@ class Wl_Env:
         self.base_ang_vel = transform_by_quat(self.robot.get_ang(), base_quat_inv)
         self.projected_gravity = transform_by_quat(self.global_gravity_dir, base_quat_inv)
 
+        # 相对“正轨”直线的横向/纵向误差（真实车上可由定位/里程计得到）。
+        track_dx = self.base_pos[:, 0:1] - self.track_origin[:, 0:1]
+        track_dy = self.base_pos[:, 1:2] - self.track_origin[:, 1:2]
+        cos_yaw = torch.cos(self.track_yaw)
+        sin_yaw = torch.sin(self.track_yaw)
+        self.track_along = cos_yaw * track_dx + sin_yaw * track_dy
+        self.track_cross = -sin_yaw * track_dx + cos_yaw * track_dy
+
         self.joint_pos = self.robot.get_dofs_position(self.joints_dof_idx)
         self.joint_vel = self.robot.get_dofs_velocity(self.joints_dof_idx)
         self.wheel_vel = self.robot.get_dofs_velocity(self.wheels_dof_idx)
@@ -480,6 +495,11 @@ class Wl_Env:
             self.gimbal_abs_ang_rad.zero_()
             self.gimbal_abs_ang_vel.zero_()
             self.gimbal_yaw_abs_ref.copy_(torch.deg2rad(self.base_euler[:,2:3]) + self.default_joint_pos[-1])
+            # 锁定本 episode 的“正轨”：起点=初始 base 位置，方向=初始期望朝向。
+            self.track_origin.copy_(self.base_pos[:, :2])
+            self.track_yaw.copy_(self.gimbal_yaw_abs_ref)
+            self.track_cross.zero_()
+            self.track_along.zero_()
 
             # 其他
             self.reset_buf.fill_(True)
@@ -496,6 +516,11 @@ class Wl_Env:
                 env_idx[:, None], self.init_projected_gravity_dir, self.projected_gravity, out=self.projected_gravity
             )
             torch.where(env_idx[:, None], torch.deg2rad(self.base_euler[:,2:3]) + self.default_joint_pos[-1], self.gimbal_yaw_abs_ref, out=self.gimbal_yaw_abs_ref)
+            # 重置该 episode 的“正轨”。
+            torch.where(env_idx[:, None], self.base_pos[:, :2], self.track_origin, out=self.track_origin)
+            torch.where(env_idx[:, None], self.gimbal_yaw_abs_ref, self.track_yaw, out=self.track_yaw)
+            self.track_cross.masked_fill_(env_idx[:, None], 0.0)
+            self.track_along.masked_fill_(env_idx[:, None], 0.0)
             self.height_gate.masked_fill_(env_idx, 1.0)
             self.attitude_gate.masked_fill_(env_idx, 1.0)
             self.tracking_gate_raw.masked_fill_(env_idx, 1.0)
@@ -623,6 +648,11 @@ class Wl_Env:
 
             #“gimbal_base_cha”：车需要根据当前base和gimbal的角度来选择 “走路优先”/“旋转优先” TODO
             "gimbal_yaw_2_base_angle": torch.stack([torch.sin(self.gimbal_ang[:,0]),torch.cos(self.gimbal_ang[:,0])],dim=-1),#单传warp会跳变，还是得隐射到连续上，单sin/cos可能辨别不了对称，所以就二维了
+
+            # “正轨”跟踪误差：横向决定“要不要回线”，纵向帮助判断自己走了多远。
+            # 实车可由点云匹配/里程计相对起点算出来，不需要绝对世界坐标。
+            "track_cross": self.track_cross * self.obs_scales["track_cross"],  # 1
+            "track_along": self.track_along * self.obs_scales["track_along"],  # 1
             "actions": self.actions,
         }
         self.obs_buf = torch.concatenate(tuple(self.obs_components.values()), dim=-1)
@@ -630,6 +660,9 @@ class Wl_Env:
             **self.obs_components,
             "privileged_base_lin_vel": self.base_lin_vel * self.obs_scales["lin_vel"],  # 3
             "privileged_base_ang_vel": self.base_ang_vel * self.obs_scales["ang_vel"],  # 3
+            # 绝对世界坐标只给 critic，真机不一定能稳定拿到。
+            "privileged_base_pos": self.base_pos[:, :2],  # 2
+            "privileged_base_yaw": torch.deg2rad(self.base_euler[:, 2:3]),  # 1
         }
         self.critic_obs_buf = torch.concatenate(tuple(self.critic_obs_components.values()), dim=-1)
         return
@@ -796,8 +829,10 @@ class Wl_Env:
 
     def _reward_tracking_lin_vel(self):#同时限制大小和方向
         # 弱的无门控误差惩罚，确保门控未打开时仍有速度学习信号。
+        # 目标方向用“正轨”方向 track_yaw（固定），而不是会漂移的实际云台朝向，
+        # 这样 vx 才对应世界系里的一条直线。
         base_lin_vel_world = self.robot.get_vel()[:,:2]#N,2
-        psi=self.gimbal_abs_ang_rad.squeeze(-1)
+        psi=self.track_yaw.squeeze(-1)
         target=self.commands[:,0:1]*torch.stack([torch.cos(psi),torch.sin(psi)],dim=-1) #N,2
         return torch.sum(torch.square(base_lin_vel_world-target),dim=-1)#(x-x)^2+(y-y)^2
 
@@ -813,11 +848,15 @@ class Wl_Env:
 
     def _reward_gated_tracking_lin_vel(self):
         base_lin_vel_world = self.robot.get_vel()[:,:2]#N,2
-        psi=self.gimbal_abs_ang_rad.squeeze(-1)
+        psi=self.track_yaw.squeeze(-1)
         target=self.commands[:,0:1]*torch.stack([torch.cos(psi),torch.sin(psi)],dim=-1) #N,2
         err=torch.sum(torch.square(base_lin_vel_world-target),dim=-1)#(x-x)^2+(y-y)^2
         tracking_bonus = torch.exp(-err / self.reward_cfg["tracking_sigma"])
         return self.tracking_gate * tracking_bonus
+
+    def _reward_track_cross(self):
+        # 惩罚相对“正轨”直线的横向偏差，提供“回到正轨”的学习信号。
+        return torch.square(self.track_cross).squeeze(-1)
 
     def _reward_gated_tracking_ang_vel(self):
         ang_vel_error = torch.square(self.base_ang_vel[:, 2] - self.commands[:, 1])

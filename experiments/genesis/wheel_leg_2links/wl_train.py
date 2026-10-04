@@ -159,6 +159,8 @@ def get_cfgs():
             "gimbal_yaw_abs_vel": 1.0/np.pi,
             "gimbal_yaw_error": 1.0/np.pi,
             "gimbal_yaw_2_base_angle": 1.0/np.pi,
+            "track_cross": 1.0 / 0.5,  # 横向偏差 ~米，按 0.5 m 归一
+            "track_along": 1.0 / 0.5,  # 纵向位移 ~米
         },
     }
     reward_cfg = {
@@ -184,6 +186,7 @@ def get_cfgs():
             "joint_vel": -1.0,
             "joint_pos": 0,
             "gimbal_yaw_ang":-10,
+            "track_cross": -10.0,
 
             "alive": 5.0,
             "death": -100.0,
