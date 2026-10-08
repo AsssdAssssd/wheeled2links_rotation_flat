@@ -619,8 +619,9 @@ class Wl_Env:
         # 字典插入顺序就是策略输入的拼接顺序；调整顺序或维度后旧模型将不再兼容。
         if self.policy_velocity_source == "imu_wheel_estimator":
             velocity_components = {
-                "estimated_base_lin_vel": self.estimated_base_lin_vel.unsqueeze(-1)
-                * self.obs_scales["lin_vel"],  # 1
+                # "estimated_base_lin_vel": self.estimated_base_lin_vel.unsqueeze(-1)
+                "base_lin_vel": self.base_lin_vel * self.obs_scales["lin_vel"],  # 3
+                # * self.obs_scales["lin_vel"],  # 1
                 "imu_ang_vel": self.imu_ang_vel * self.obs_scales["ang_vel"],  # 3
             }
         else:
